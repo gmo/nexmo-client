@@ -3,8 +3,12 @@
 namespace Nexmo;
 
 use GuzzleHttp\Client as HttpClient;
+use GuzzleHttp\Handler\CurlHandler;
+use GuzzleHttp\HandlerStack;
+use GuzzleHttp\Psr7\Uri;
 use Nexmo\Service;
 use Nexmo\Service\ResourceCollection;
+use Psr\Http\Message\RequestInterface;
 
 /**
  * Class Client
@@ -48,6 +52,7 @@ class Client extends ResourceCollection
     public function __get($name)
     {
         $this->loadClient();
+
         return parent::__get($name);
     }
 
@@ -56,14 +61,24 @@ class Client extends ResourceCollection
         if ($this->client) {
             return;
         }
+
+        $handler = new CurlHandler();
+        $stack = HandlerStack::create($handler);
+        $stack->push($this->getDefaultsMiddleware());
+
         $this->client = new HttpClient([
-            'base_url' => static::BASE_URL,
-            'defaults' => [
-                'query' => [
-                    'api_key' => $this->apiKey,
-                    'api_secret' => $this->apiSecret
-                ]
-            ]
+            'base_uri' => static::BASE_URL,
+            'handler'  => $stack,
         ]);
+
+    }
+
+    protected function getDefaultsMiddleware()
+    {
+        return function(RequestInterface $request) {
+            $uri = Uri::withQueryValue($request->getUri(), 'api_key', $this->apiKey);
+            $uri = Uri::withQueryValue($uri, 'api_secret', $this->apiSecret);
+            return $request->withUri($uri);
+        };
     }
 }
